@@ -53,19 +53,16 @@ tbody tr:hover { background: #f9fafb; }
 </style>
 </head>
 <body>
-
 <div id="loading" class="loading">
 <p style="font-size: 1.25rem; color: #6b7280; margin-bottom: 24px;">Import CSV to get started</p>
 <input type="file" id="fileInputLoading" accept=".csv" style="display: none;">
 <label for="fileInputLoading" class="btn-import">Import CSV File</label>
 </div>
-
 <div id="app" class="container hidden">
 <div class="header">
 <div><h1>Budget Tracker</h1><p id="info">No data loaded</p></div>
 <div><input type="file" id="fileInput" accept=".csv" style="display: none;"><label for="fileInput" class="btn-import">Import CSV</label><div id="msg"></div></div>
 </div>
-
 <div class="controls">
 <div class="control-row">
 <span class="control-label">View:</span>
@@ -75,6 +72,10 @@ tbody tr:hover { background: #f9fafb; }
 <button class="view-btn" onclick="app.setView('year')">Year</button>
 <button class="view-btn" onclick="app.setView('all')">All</button>
 </div>
+<div class="control-row hidden" id="yearRow">
+<span class="control-label">Select Year:</span>
+<div id="yearBtns" style="display: flex; gap: 8px; flex-wrap: wrap;"></div>
+</div>
 <div class="control-row hidden" id="periodRow">
 <span class="control-label" id="periodLabel">Period:</span>
 <button class="nav-btn" id="prevBtn" onclick="app.navigate(-1)">← Prev</button>
@@ -82,225 +83,245 @@ tbody tr:hover { background: #f9fafb; }
 <div id="periodBtns" style="display: flex; gap: 8px; flex-wrap: wrap;"></div>
 </div>
 </div>
-
 <div class="stats-grid">
 <div class="stat-card"><div class="stat-label">Total Spending</div><div class="stat-value negative" id="totalSpend">$0</div><div class="stat-note" id="periodNote">-</div></div>
 <div class="stat-card"><div class="stat-label">Avg per Day</div><div class="stat-value neutral" id="avgSpend">$0</div><div class="stat-note">Based on period</div></div>
 <div class="stat-card"><div class="stat-label">Transactions</div><div class="stat-value neutral" id="txCount">0</div><div class="stat-note">Debit only</div></div>
 <div class="stat-card"><div class="stat-label">Date Range</div><div class="stat-value neutral" style="font-size: 1.125rem;" id="dateRange">-</div><div class="stat-note" id="daysNote">-</div></div>
 </div>
-
 <div class="card expense">
 <h2>Spending by Category</h2>
 <table><thead><tr><th>Category</th><th class="right">Total</th><th class="right">Count</th><th class="right">%</th><th class="right">Avg</th></tr></thead><tbody id="catTable"></tbody></table>
 </div>
-
 <div class="charts-grid">
 <div class="card"><h2>Spending Over Time</h2><div class="chart-container"><canvas id="timeChart"></canvas></div></div>
 <div class="card"><h2>Category Breakdown</h2><div class="chart-container"><canvas id="pieChart"></canvas></div></div>
 </div>
-
 <div class="card"><h2>Top 10 Categories</h2><div class="chart-container"><canvas id="barChart"></canvas></div></div>
 </div>
-
 <script>
 console.log('Starting app...');
-
-const app = {
-  data: [], filtered: [], view: 'month', period: null, periods: [],
-  charts: { time: null, pie: null, bar: null },
-  
-  init() {
-    console.log('Init app');
-    document.getElementById('fileInputLoading').onchange = e => this.load(e);
-    document.getElementById('fileInput').onchange = e => this.load(e);
-  },
-  
-  load(e) {
-    console.log('File selected');
-    const file = e.target.files[0];
-    if (!file) return;
-    const reader = new FileReader();
-    reader.onload = ev => this.parse(ev.target.result);
-    reader.readAsText(file);
-  },
-  
-  parse(text) {
-    console.log('Parsing CSV');
-    Papa.parse(text, {
-      header: true, dynamicTyping: true, skipEmptyLines: true,
-      complete: r => {
-        this.data = r.data.filter(row => row['Transaction Date'] && row['Credit Debit Indicator'] === 'Debit').map(row => ({
-          date: new Date(row['Transaction Date']),
-          amount: Math.abs(row['Amount'] || 0),
-          category: (row['Category'] || 'Other').trim()
-        })).filter(t => !isNaN(t.date.getTime()));
-        console.log('Loaded', this.data.length, 'transactions');
-        if (this.data.length === 0) { this.showMsg('No transactions found', true); return; }
-        this.showMsg('Loaded ' + this.data.length + ' transactions');
-        document.getElementById('loading').classList.add('hidden');
-        document.getElementById('app').classList.remove('hidden');
-        this.setView('month');
-      }
-    });
-  },
-  
-  showMsg(txt, err) {
-    const div = document.getElementById('msg');
-    div.className = 'message ' + (err ? 'error' : 'success');
-    div.textContent = txt;
-    setTimeout(() => div.textContent = '', 4000);
-  },
-  
-  setView(v) {
-    console.log('View:', v);
-    this.view = v;
-    this.period = null;
-    document.querySelectorAll('.view-btn').forEach(b => b.classList.remove('active'));
-    event.target.classList.add('active');
-    if (v !== 'all' && v !== 'year') {
-      this.makePeriods();
-      document.getElementById('periodRow').classList.remove('hidden');
-    } else {
-      document.getElementById('periodRow').classList.add('hidden');
-    }
-    this.filter();
-    this.update();
-  },
-  
-  makePeriods() {
-    const s = new Set();
-    this.data.forEach(t => {
-      let k;
-      if (this.view === 'day') k = t.date.toISOString().split('T')[0];
-      else if (this.view === 'week') { const d = new Date(t.date); d.setDate(d.getDate() - d.getDay()); k = d.toISOString().split('T')[0]; }
-      else if (this.view === 'month') k = t.date.getFullYear() + '-' + String(t.date.getMonth() + 1).padStart(2, '0');
-      if (k) s.add(k);
-    });
-    this.periods = Array.from(s).sort();
-    if (this.periods.length > 0) this.period = this.periods[this.periods.length - 1];
-  },
-  
-  setPeriod(p) {
-    this.period = p;
-    this.filter();
-    this.update();
-  },
-  
-  navigate(dir) {
-    const i = this.periods.indexOf(this.period);
-    const n = i + dir;
-    if (n >= 0 && n < this.periods.length) {
-      this.period = this.periods[n];
-      this.filter();
-      this.update();
-    }
-  },
-  
-  filter() {
-    if (this.view === 'all' || this.view === 'year') { this.filtered = this.data; return; }
-    if (!this.period) { this.filtered = this.data; return; }
-    this.filtered = this.data.filter(t => {
-      let k;
-      if (this.view === 'day') k = t.date.toISOString().split('T')[0];
-      else if (this.view === 'week') { const d = new Date(t.date); d.setDate(d.getDate() - d.getDay()); k = d.toISOString().split('T')[0]; }
-      else if (this.view === 'month') k = t.date.getFullYear() + '-' + String(t.date.getMonth() + 1).padStart(2, '0');
-      return k === this.period;
-    });
-  },
-  
-  update() {
-    this.updatePeriods();
-    this.updateStats();
-    this.updateTable();
-    this.updateCharts();
-  },
-  
-  updatePeriods() {
-    if (this.view === 'all' || this.view === 'year') return;
-    const div = document.getElementById('periodBtns');
-    div.innerHTML = this.periods.map(p => '<button class="period-btn ' + (p === this.period ? 'active' : '') + '" onclick="app.setPeriod(\'' + p + '\')">' + this.fmtPeriod(p) + '</button>').join('');
-    const i = this.periods.indexOf(this.period);
-    document.getElementById('prevBtn').disabled = i <= 0;
-    document.getElementById('nextBtn').disabled = i >= this.periods.length - 1;
-  },
-  
-  fmtPeriod(k) {
-    if (this.view === 'day') return new Date(k).toLocaleDateString('en-US', {month: 'short', day: 'numeric', year: 'numeric'});
-    if (this.view === 'month') { const p = k.split('-'); return new Date(p[0], p[1]-1).toLocaleDateString('en-US', {month: 'long', year: 'numeric'}); }
-    if (this.view === 'week') { const s = new Date(k); const e = new Date(s); e.setDate(e.getDate() + 6); return s.toLocaleDateString('en-US', {month: 'short', day: 'numeric'}) + ' - ' + e.toLocaleDateString('en-US', {month: 'short', day: 'numeric'}); }
-    return k;
-  },
-  
-  updateStats() {
-    const tot = this.filtered.reduce((s, t) => s + t.amount, 0);
-    const dates = this.filtered.map(t => t.date);
-    const min = dates.length > 0 ? new Date(Math.min(...dates)) : null;
-    const max = dates.length > 0 ? new Date(Math.max(...dates)) : null;
-    const days = min && max ? Math.ceil((max - min) / 86400000) + 1 : 0;
-    const avg = days > 0 ? tot / days : 0;
-    document.getElementById('totalSpend').textContent = '$' + tot.toFixed(2);
-    document.getElementById('avgSpend').textContent = '$' + avg.toFixed(2);
-    document.getElementById('txCount').textContent = this.filtered.length;
-    if (min && max) {
-      document.getElementById('dateRange').textContent = min.toLocaleDateString('en-US', {month: 'short', day: 'numeric'}) + ' - ' + max.toLocaleDateString('en-US', {month: 'short', day: 'numeric', year: 'numeric'});
-      document.getElementById('daysNote').textContent = days + ' day' + (days !== 1 ? 's' : '');
-    }
-    document.getElementById('periodNote').textContent = this.period ? this.fmtPeriod(this.period) : 'All time';
-    document.getElementById('info').textContent = this.data.length + ' total • Viewing: ' + (this.period ? this.fmtPeriod(this.period) : 'All');
-  },
-  
-  updateTable() {
-    const m = {};
-    this.filtered.forEach(t => { if (!m[t.category]) m[t.category] = {tot: 0, cnt: 0}; m[t.category].tot += t.amount; m[t.category].cnt++; });
-    const cats = Object.entries(m).map(([n, d]) => ({name: n, tot: d.tot, cnt: d.cnt, avg: d.tot/d.cnt})).sort((a,b) => b.tot - a.tot);
-    const tot = cats.reduce((s, c) => s + c.tot, 0);
-    const rows = cats.map(c => '<tr><td>' + c.name + '</td><td class="right negative-value">$' + c.tot.toFixed(2) + '</td><td class="right">' + c.cnt + '</td><td class="right">' + (tot > 0 ? (c.tot/tot*100).toFixed(1) : 0) + '%</td><td class="right">$' + c.avg.toFixed(2) + '</td></tr>').join('');
-    const totalRow = '<tr class="total-row"><td>Total</td><td class="right">$' + tot.toFixed(2) + '</td><td class="right">' + this.filtered.length + '</td><td class="right">100%</td><td class="right">$' + (this.filtered.length > 0 ? (tot/this.filtered.length).toFixed(2) : '0.00') + '</td></tr>';
-    document.getElementById('catTable').innerHTML = rows + totalRow;
-  },
-  
-  updateCharts() {
-    const tm = {};
-    this.filtered.forEach(t => {
-      let k;
-      if (this.view === 'year' || this.view === 'all') k = t.date.getFullYear() + '-' + String(t.date.getMonth() + 1).padStart(2, '0');
-      else if (this.view === 'month' || this.view === 'week') k = t.date.toISOString().split('T')[0];
-      else if (this.view === 'day') k = String(t.date.getHours()).padStart(2, '0') + ':00';
-      if (!tm[k]) tm[k] = 0;
-      tm[k] += t.amount;
-    });
-    const td = Object.entries(tm).map(([p, a]) => ({p, a})).sort((a,b) => a.p.localeCompare(b.p));
-    
-    const cm = {};
-    this.filtered.forEach(t => { if (!cm[t.category]) cm[t.category] = 0; cm[t.category] += t.amount; });
-    const cd = Object.entries(cm).map(([n, t]) => ({n, t})).sort((a,b) => b.t - a.t);
-    const top = cd.slice(0, 10);
-    
-    if (this.charts.time) this.charts.time.destroy();
-    this.charts.time = new Chart(document.getElementById('timeChart'), {
-      type: 'line',
-      data: { labels: td.map(d => d.p), datasets: [{ label: 'Spending', data: td.map(d => d.a), borderColor: '#dc2626', backgroundColor: 'rgba(220,38,38,0.1)', fill: true }] },
-      options: { responsive: true, maintainAspectRatio: false, plugins: { tooltip: { callbacks: { label: c => '$' + c.parsed.y.toFixed(2) } } }, scales: { y: { beginAtZero: true, ticks: { callback: v => '$' + v } } } }
-    });
-    
-    if (this.charts.pie) this.charts.pie.destroy();
-    this.charts.pie = new Chart(document.getElementById('pieChart'), {
-      type: 'pie',
-      data: { labels: top.map(d => d.n), datasets: [{ data: top.map(d => d.t), backgroundColor: ['#0088FE','#00C49F','#FFBB28','#FF8042','#8884d8','#82ca9d','#ffc658','#ff7c7c','#8dd1e1','#d084d0'] }] },
-      options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { position: 'right' }, tooltip: { callbacks: { label: c => c.label + ': $' + c.parsed.toFixed(2) } } } }
-    });
-    
-    if (this.charts.bar) this.charts.bar.destroy();
-    this.charts.bar = new Chart(document.getElementById('barChart'), {
-      type: 'bar',
-      data: { labels: top.map(d => d.n), datasets: [{ label: 'Amount', data: top.map(d => d.t), backgroundColor: '#dc2626' }] },
-      options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false } }, scales: { y: { beginAtZero: true, ticks: { callback: v => '$' + v } } } }
-    });
-  }
+var app = {
+data: [], filtered: [], view: 'month', period: null, periods: [], selectedYear: null, years: [],
+charts: { time: null, pie: null, bar: null },
+init: function() {
+console.log('Init app');
+var self = this;
+document.getElementById('fileInputLoading').onchange = function(e) { self.load(e); };
+document.getElementById('fileInput').onchange = function(e) { self.load(e); };
+},
+load: function(e) {
+console.log('File selected');
+var file = e.target.files[0];
+if (!file) return;
+var reader = new FileReader();
+var self = this;
+reader.onload = function(ev) { self.parse(ev.target.result); };
+reader.readAsText(file);
+},
+parse: function(text) {
+console.log('Parsing CSV');
+var self = this;
+Papa.parse(text, {
+header: true, dynamicTyping: true, skipEmptyLines: true,
+complete: function(r) {
+self.data = r.data.filter(function(row) { return row['Transaction Date'] && row['Credit Debit Indicator'] === 'Debit'; }).map(function(row) {
+return {
+date: new Date(row['Transaction Date']),
+amount: Math.abs(row['Amount'] || 0),
+category: (row['Category'] || 'Other').trim()
 };
-
-window.addEventListener('DOMContentLoaded', () => { console.log('DOM ready'); app.init(); });
+}).filter(function(t) { return !isNaN(t.date.getTime()); });
+console.log('Loaded', self.data.length, 'transactions');
+if (self.data.length === 0) { self.showMsg('No transactions found', true); return; }
+self.showMsg('Loaded ' + self.data.length + ' transactions');
+document.getElementById('loading').classList.add('hidden');
+document.getElementById('app').classList.remove('hidden');
+self.setView('month');
+}
+});
+},
+showMsg: function(txt, err) {
+var div = document.getElementById('msg');
+div.className = 'message ' + (err ? 'error' : 'success');
+div.textContent = txt;
+setTimeout(function() { div.textContent = ''; }, 4000);
+},
+setView: function(v) {
+console.log('View:', v);
+this.view = v;
+this.period = null;
+this.selectedYear = null;
+var buttons = document.querySelectorAll('.view-btn');
+for (var i = 0; i < buttons.length; i++) { buttons[i].classList.remove('active'); }
+event.target.classList.add('active');
+if (v === 'year') {
+this.makeYears();
+document.getElementById('yearRow').classList.remove('hidden');
+document.getElementById('periodRow').classList.add('hidden');
+} else if (v !== 'all') {
+this.makePeriods();
+document.getElementById('periodRow').classList.remove('hidden');
+document.getElementById('yearRow').classList.add('hidden');
+} else {
+document.getElementById('periodRow').classList.add('hidden');
+document.getElementById('yearRow').classList.add('hidden');
+}
+this.filter();
+this.update();
+},
+makePeriods: function() {
+var s = new Set();
+var self = this;
+this.data.forEach(function(t) {
+var k;
+if (self.view === 'day') k = t.date.toISOString().split('T')[0];
+else if (self.view === 'week') { var d = new Date(t.date); d.setDate(d.getDate() - d.getDay()); k = d.toISOString().split('T')[0]; }
+else if (self.view === 'month') k = t.date.getFullYear() + '-' + String(t.date.getMonth() + 1).padStart(2, '0');
+if (k) s.add(k);
+});
+this.periods = Array.from(s).sort();
+if (this.periods.length > 0) this.period = this.periods[this.periods.length - 1];
+},
+makeYears: function() {
+var s = new Set();
+this.data.forEach(function(t) { s.add(t.date.getFullYear()); });
+this.years = Array.from(s).sort(function(a,b) { return b - a; });
+if (this.years.length > 0) this.selectedYear = this.years[0];
+},
+setYear: function(y) {
+this.selectedYear = y;
+this.filter();
+this.update();
+},
+setPeriod: function(p) {
+this.period = p;
+this.filter();
+this.update();
+},
+navigate: function(dir) {
+var i = this.periods.indexOf(this.period);
+var n = i + dir;
+if (n >= 0 && n < this.periods.length) {
+this.period = this.periods[n];
+this.filter();
+this.update();
+}
+},
+filter: function() {
+var self = this;
+if (this.view === 'all') { this.filtered = this.data; return; }
+if (this.view === 'year') {
+if (this.selectedYear) {
+this.filtered = this.data.filter(function(t) { return t.date.getFullYear() === self.selectedYear; });
+} else {
+this.filtered = this.data;
+}
+return;
+}
+if (!this.period) { this.filtered = this.data; return; }
+this.filtered = this.data.filter(function(t) {
+var k;
+if (self.view === 'day') k = t.date.toISOString().split('T')[0];
+else if (self.view === 'week') { var d = new Date(t.date); d.setDate(d.getDate() - d.getDay()); k = d.toISOString().split('T')[0]; }
+else if (self.view === 'month') k = t.date.getFullYear() + '-' + String(t.date.getMonth() + 1).padStart(2, '0');
+return k === self.period;
+});
+},
+update: function() {
+this.updateYears();
+this.updatePeriods();
+this.updateStats();
+this.updateTable();
+this.updateCharts();
+},
+updateYears: function() {
+if (this.view !== 'year') return;
+var div = document.getElementById('yearBtns');
+var self = this;
+div.innerHTML = this.years.map(function(y) { return '<button class="view-btn ' + (y === self.selectedYear ? 'active' : '') + '" onclick="app.setYear(' + y + ')">' + y + '</button>'; }).join('');
+},
+updatePeriods: function() {
+if (this.view === 'all' || this.view === 'year') return;
+var div = document.getElementById('periodBtns');
+var self = this;
+div.innerHTML = this.periods.map(function(p) { return '<button class="period-btn ' + (p === self.period ? 'active' : '') + '" onclick="app.setPeriod(\'' + p + '\')">' + self.fmtPeriod(p) + '</button>'; }).join('');
+var i = this.periods.indexOf(this.period);
+document.getElementById('prevBtn').disabled = i <= 0;
+document.getElementById('nextBtn').disabled = i >= this.periods.length - 1;
+},
+fmtPeriod: function(k) {
+if (this.view === 'day') return new Date(k).toLocaleDateString('en-US', {month: 'short', day: 'numeric', year: 'numeric'});
+if (this.view === 'month') { var p = k.split('-'); return new Date(p[0], p[1]-1).toLocaleDateString('en-US', {month: 'long', year: 'numeric'}); }
+if (this.view === 'week') { var s = new Date(k); var e = new Date(s); e.setDate(e.getDate() + 6); return s.toLocaleDateString('en-US', {month: 'short', day: 'numeric'}) + ' - ' + e.toLocaleDateString('en-US', {month: 'short', day: 'numeric'}); }
+return k;
+},
+updateStats: function() {
+var tot = this.filtered.reduce(function(s, t) { return s + t.amount; }, 0);
+var dates = this.filtered.map(function(t) { return t.date; });
+var min = dates.length > 0 ? new Date(Math.min.apply(null, dates)) : null;
+var max = dates.length > 0 ? new Date(Math.max.apply(null, dates)) : null;
+var days = min && max ? Math.ceil((max - min) / 86400000) + 1 : 0;
+var avg = days > 0 ? tot / days : 0;
+document.getElementById('totalSpend').textContent = '$' + tot.toFixed(2);
+document.getElementById('avgSpend').textContent = '$' + avg.toFixed(2);
+document.getElementById('txCount').textContent = this.filtered.length;
+if (min && max) {
+document.getElementById('dateRange').textContent = min.toLocaleDateString('en-US', {month: 'short', day: 'numeric'}) + ' - ' + max.toLocaleDateString('en-US', {month: 'short', day: 'numeric', year: 'numeric'});
+document.getElementById('daysNote').textContent = days + ' day' + (days !== 1 ? 's' : '');
+}
+document.getElementById('periodNote').textContent = this.view === 'year' && this.selectedYear ? this.selectedYear : (this.period ? this.fmtPeriod(this.period) : 'All time');
+document.getElementById('info').textContent = this.data.length + ' total • Viewing: ' + (this.view === 'year' && this.selectedYear ? this.selectedYear : (this.period ? this.fmtPeriod(this.period) : 'All'));
+},
+updateTable: function() {
+var m = {};
+this.filtered.forEach(function(t) { if (!m[t.category]) m[t.category] = {tot: 0, cnt: 0}; m[t.category].tot += t.amount; m[t.category].cnt++; });
+var cats = Object.entries(m).map(function(e) { return {name: e[0], tot: e[1].tot, cnt: e[1].cnt, avg: e[1].tot/e[1].cnt}; }).sort(function(a,b) { return b.tot - a.tot; });
+var tot = cats.reduce(function(s, c) { return s + c.tot; }, 0);
+var rows = cats.map(function(c) { return '<tr><td>' + c.name + '</td><td class="right negative-value">$' + c.tot.toFixed(2) + '</td><td class="right">' + c.cnt + '</td><td class="right">' + (tot > 0 ? (c.tot/tot*100).toFixed(1) : 0) + '%</td><td class="right">$' + c.avg.toFixed(2) + '</td></tr>'; }).join('');
+var totalRow = '<tr class="total-row"><td>Total</td><td class="right">$' + tot.toFixed(2) + '</td><td class="right">' + this.filtered.length + '</td><td class="right">100%</td><td class="right">$' + (this.filtered.length > 0 ? (tot/this.filtered.length).toFixed(2) : '0.00') + '</td></tr>';
+document.getElementById('catTable').innerHTML = rows + totalRow;
+},
+updateCharts: function() {
+var tm = {};
+var self = this;
+this.filtered.forEach(function(t) {
+var k;
+if (self.view === 'year') k = String(t.date.getMonth() + 1).padStart(2, '0');
+else if (self.view === 'all') k = t.date.getFullYear() + '-' + String(t.date.getMonth() + 1).padStart(2, '0');
+else if (self.view === 'month' || self.view === 'week') k = t.date.toISOString().split('T')[0];
+else if (self.view === 'day') k = String(t.date.getHours()).padStart(2, '0') + ':00';
+if (!tm[k]) tm[k] = 0;
+tm[k] += t.amount;
+});
+var td = Object.entries(tm).map(function(e) { return {p: e[0], a: e[1]}; }).sort(function(a,b) { return a.p.localeCompare(b.p); });
+var monthNames = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+var labels = this.view === 'year' ? td.map(function(d) { return monthNames[parseInt(d.p) - 1]; }) : td.map(function(d) { return d.p; });
+var cm = {};
+this.filtered.forEach(function(t) { if (!cm[t.category]) cm[t.category] = 0; cm[t.category] += t.amount; });
+var cd = Object.entries(cm).map(function(e) { return {n: e[0], t: e[1]}; }).sort(function(a,b) { return b.t - a.t; });
+var top = cd.slice(0, 10);
+if (this.charts.time) this.charts.time.destroy();
+this.charts.time = new Chart(document.getElementById('timeChart'), {
+type: 'line',
+data: { labels: labels, datasets: [{ label: 'Spending', data: td.map(function(d) { return d.a; }), borderColor: '#dc2626', backgroundColor: 'rgba(220,38,38,0.1)', fill: true }] },
+options: { responsive: true, maintainAspectRatio: false, plugins: { tooltip: { callbacks: { label: function(c) { return '$' + c.parsed.y.toFixed(2); } } } }, scales: { y: { beginAtZero: true, ticks: { callback: function(v) { return '$' + v; } } } } }
+});
+if (this.charts.pie) this.charts.pie.destroy();
+this.charts.pie = new Chart(document.getElementById('pieChart'), {
+type: 'pie',
+data: { labels: top.map(function(d) { return d.n; }), datasets: [{ data: top.map(function(d) { return d.t; }), backgroundColor: ['#0088FE','#00C49F','#FFBB28','#FF8042','#8884d8','#82ca9d','#ffc658','#ff7c7c','#8dd1e1','#d084d0'] }] },
+options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { position: 'right' }, tooltip: { callbacks: { label: function(c) { return c.label + ': $' + c.parsed.toFixed(2); } } } } }
+});
+if (this.charts.bar) this.charts.bar.destroy();
+this.charts.bar = new Chart(document.getElementById('barChart'), {
+type: 'bar',
+data: { labels: top.map(function(d) { return d.n; }), datasets: [{ label: 'Amount', data: top.map(function(d) { return d.t; }), backgroundColor: '#dc2626' }] },
+options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false } }, scales: { y: { beginAtZero: true, ticks: { callback: function(v) { return '$' + v; } } } } }
+});
+}
+};
+window.addEventListener('DOMContentLoaded', function() { console.log('DOM ready'); app.init(); });
 console.log('Script loaded');
 </script>
 </body>
