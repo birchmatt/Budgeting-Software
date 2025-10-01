@@ -4,7 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Budget Tracker Dashboard</title>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.3.2/papaparse.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/3.9.1/chart.min.js"></script>
     <style>
         * {
@@ -21,7 +21,7 @@
         }
 
         .container {
-            max-width: 1280px;
+            max-width: 1400px;
             margin: 0 auto;
         }
 
@@ -79,118 +79,151 @@
             font-size: 0.875rem;
         }
 
+        .success-msg {
+            color: #16a34a;
+            background: #dcfce7;
+            padding: 8px 12px;
+            border-radius: 6px;
+            font-size: 0.875rem;
+        }
+
+        .month-selector {
+            display: flex;
+            gap: 8px;
+            margin-bottom: 24px;
+            flex-wrap: wrap;
+        }
+
+        .month-btn {
+            padding: 10px 20px;
+            border-radius: 8px;
+            border: 2px solid #e5e7eb;
+            background: white;
+            cursor: pointer;
+            font-weight: 500;
+            transition: all 0.2s;
+        }
+
+        .month-btn:hover {
+            border-color: #2563eb;
+        }
+
+        .month-btn.active {
+            background: #2563eb;
+            color: white;
+            border-color: #2563eb;
+        }
+
         .stats-grid {
             display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+            grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
             gap: 16px;
             margin-bottom: 24px;
         }
 
         .stat-card {
             background: white;
-            border-radius: 8px;
-            box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+            border-radius: 12px;
+            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
             padding: 24px;
         }
 
         .stat-label {
             font-size: 0.875rem;
             color: #6b7280;
-            margin-bottom: 4px;
+            margin-bottom: 8px;
+            font-weight: 500;
         }
 
         .stat-value {
-            font-size: 1.875rem;
+            font-size: 2rem;
             font-weight: bold;
+            margin-bottom: 4px;
         }
 
-        .stat-value.red { color: #dc2626; }
-        .stat-value.blue { color: #2563eb; }
-        .stat-value.green { color: #16a34a; }
+        .stat-value.positive { color: #16a34a; }
+        .stat-value.negative { color: #dc2626; }
+        .stat-value.neutral { color: #2563eb; }
 
         .stat-note {
             font-size: 0.75rem;
             color: #9ca3af;
-            margin-top: 4px;
         }
 
         .card {
             background: white;
-            border-radius: 8px;
-            box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+            border-radius: 12px;
+            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
             padding: 24px;
             margin-bottom: 24px;
         }
 
-        .controls {
-            display: flex;
-            flex-wrap: wrap;
-            gap: 16px;
-            margin-bottom: 24px;
-        }
-
-        .control-group {
-            flex: 1;
-            min-width: 200px;
-        }
-
-        .control-label {
-            display: block;
-            font-size: 0.875rem;
-            font-weight: 500;
-            color: #374151;
-            margin-bottom: 8px;
-        }
-
-        .btn-group {
-            display: flex;
-            gap: 8px;
-        }
-
-        .btn {
-            padding: 8px 16px;
-            border-radius: 8px;
-            border: none;
-            font-weight: 500;
-            cursor: pointer;
-            transition: all 0.2s;
-        }
-
-        .btn-secondary {
-            background: #e5e7eb;
-            color: #374151;
-        }
-
-        .btn-secondary:hover {
-            background: #d1d5db;
-        }
-
-        .btn-secondary.active {
-            background: #2563eb;
-            color: white;
-        }
-
-        select {
-            width: 100%;
-            padding: 8px 16px;
-            border: 1px solid #d1d5db;
-            border-radius: 8px;
-            font-size: 1rem;
-            background: white;
-            cursor: pointer;
-        }
-
-        select:focus {
-            outline: none;
-            border-color: #2563eb;
-            box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.1);
-        }
-
         h2 {
-            font-size: 1.25rem;
+            font-size: 1.5rem;
             font-weight: bold;
             color: #1f2937;
+            margin-bottom: 20px;
+        }
+
+        .budget-table {
+            width: 100%;
+            border-collapse: collapse;
             margin-bottom: 16px;
+        }
+
+        .budget-table thead {
+            background: #f3f4f6;
+        }
+
+        .budget-table th {
+            text-align: left;
+            padding: 12px 16px;
+            font-weight: 600;
+            color: #374151;
+            border-bottom: 2px solid #d1d5db;
+        }
+
+        .budget-table th.right {
+            text-align: right;
+        }
+
+        .budget-table td {
+            padding: 12px 16px;
+            border-bottom: 1px solid #e5e7eb;
+        }
+
+        .budget-table td.right {
+            text-align: right;
+            font-weight: 500;
+        }
+
+        .budget-table tbody tr:hover {
+            background: #f9fafb;
+        }
+
+        .budget-table .category-name {
+            font-weight: 500;
+        }
+
+        .budget-table .total-row {
+            background: #f3f4f6;
+            font-weight: 600;
+        }
+
+        .income-section {
+            border-left: 4px solid #16a34a;
+        }
+
+        .expense-section {
+            border-left: 4px solid #dc2626;
+        }
+
+        .positive-value {
+            color: #16a34a;
+        }
+
+        .negative-value {
+            color: #dc2626;
         }
 
         .chart-container {
@@ -203,49 +236,48 @@
             display: grid;
             grid-template-columns: repeat(auto-fit, minmax(500px, 1fr));
             gap: 24px;
-            margin-bottom: 24px;
-        }
-
-        table {
-            width: 100%;
-            border-collapse: collapse;
-        }
-
-        thead {
-            border-bottom: 2px solid #d1d5db;
-        }
-
-        th {
-            text-align: left;
-            padding: 12px 16px;
-            font-weight: 600;
-            color: #374151;
-        }
-
-        th:not(:first-child) {
-            text-align: right;
-        }
-
-        td {
-            padding: 12px 16px;
-            border-bottom: 1px solid #e5e7eb;
-        }
-
-        td:not(:first-child) {
-            text-align: right;
-        }
-
-        tbody tr:hover {
-            background: #f9fafb;
         }
 
         .loading {
             display: flex;
             align-items: center;
             justify-content: center;
+            flex-direction: column;
             height: 100vh;
-            font-size: 1.25rem;
-            color: #6b7280;
+            gap: 16px;
+        }
+
+        .loading-spinner {
+            width: 50px;
+            height: 50px;
+            border: 4px solid #e5e7eb;
+            border-top-color: #2563eb;
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+        }
+
+        @keyframes spin {
+            to { transform: rotate(360deg); }
+        }
+
+        .progress-bar {
+            width: 100%;
+            height: 8px;
+            background: #e5e7eb;
+            border-radius: 4px;
+            overflow: hidden;
+            margin-top: 4px;
+        }
+
+        .progress-fill {
+            height: 100%;
+            background: linear-gradient(90deg, #16a34a, #22c55e);
+            border-radius: 4px;
+            transition: width 0.3s;
+        }
+
+        .progress-fill.over-budget {
+            background: linear-gradient(90deg, #dc2626, #ef4444);
         }
 
         @media (max-width: 768px) {
@@ -256,429 +288,336 @@
     </style>
 </head>
 <body>
-    <div id="loading" class="loading">Loading...</div>
+    <div id="loading" class="loading">
+        <div class="loading-spinner"></div>
+        <div style="font-size: 1.25rem; color: #6b7280;">Please import an Excel file to get started</div>
+    </div>
+    
     <div id="app" class="container" style="display: none;">
         <div class="header">
             <div class="header-content">
                 <h1>Budget Tracker Dashboard</h1>
-                <p id="header-info">Track your spending across categories and time periods</p>
+                <p id="header-info">Import your budget Excel file to view insights</p>
             </div>
             <div class="import-section">
                 <label for="fileInput" class="btn-import">
                     <svg width="20" height="20" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12" />
                     </svg>
-                    Import CSV
+                    Import Excel File
                 </label>
-                <input type="file" id="fileInput" accept=".csv" style="display: none;">
+                <input type="file" id="fileInput" accept=".xlsx,.xls" style="display: none;">
                 <div id="error-msg" class="error-msg" style="display: none;"></div>
+                <div id="success-msg" class="success-msg" style="display: none;"></div>
             </div>
         </div>
+
+        <div class="month-selector" id="month-selector"></div>
 
         <div class="stats-grid">
             <div class="stat-card">
-                <div class="stat-label">Total Spending</div>
-                <div class="stat-value red" id="total-spending">$0.00</div>
+                <div class="stat-label">Total Income</div>
+                <div class="stat-value positive" id="total-income">$0.00</div>
+                <div class="stat-note">For selected period</div>
             </div>
             <div class="stat-card">
-                <div class="stat-label">Average per <span id="avg-period">Day</span></div>
-                <div class="stat-value blue" id="avg-spending">$0.00</div>
-                <div class="stat-note">Based on actual date range</div>
+                <div class="stat-label">Total Expenses</div>
+                <div class="stat-value negative" id="total-expenses">$0.00</div>
+                <div class="stat-note">For selected period</div>
             </div>
             <div class="stat-card">
-                <div class="stat-label">Total Transactions</div>
-                <div class="stat-value green" id="total-transactions">0</div>
+                <div class="stat-label">Net Income</div>
+                <div class="stat-value neutral" id="net-income">$0.00</div>
+                <div class="stat-note">Income minus expenses</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-label">Budget vs Actual</div>
+                <div class="stat-value neutral" id="budget-variance">$0.00</div>
+                <div class="stat-note" id="budget-note">Under budget</div>
             </div>
         </div>
 
-        <div class="card">
-            <div class="controls">
-                <div class="control-group">
-                    <label class="control-label">Time Period</label>
-                    <div class="btn-group">
-                        <button class="btn btn-secondary" data-view="week">Week</button>
-                        <button class="btn btn-secondary active" data-view="month">Month</button>
-                        <button class="btn btn-secondary" data-view="year">Year</button>
-                    </div>
-                </div>
-                <div class="control-group">
-                    <label class="control-label">Category Filter</label>
-                    <select id="category-select">
-                        <option value="all">All Categories</option>
-                    </select>
-                </div>
-            </div>
-
-            <h2>Spending Over Time</h2>
-            <div class="chart-container">
-                <canvas id="timeChart"></canvas>
-            </div>
-        </div>
-
-        <div class="charts-grid">
-            <div class="card">
-                <h2>Spending by Category</h2>
-                <div class="chart-container">
-                    <canvas id="pieChart"></canvas>
-                </div>
-            </div>
-            <div class="card">
-                <h2>Top 10 Categories</h2>
-                <div class="chart-container">
-                    <canvas id="barChart"></canvas>
-                </div>
-            </div>
-        </div>
-
-        <div class="card">
-            <h2>Category Breakdown</h2>
-            <table id="category-table">
+        <div class="card income-section">
+            <h2>Income</h2>
+            <table class="budget-table" id="income-table">
                 <thead>
                     <tr>
                         <th>Category</th>
-                        <th>Total Spent</th>
-                        <th>% of Total</th>
+                        <th class="right">Actual</th>
+                        <th class="right">Budgeted</th>
+                        <th class="right">Variance</th>
+                        <th class="right">% of Budget</th>
                     </tr>
                 </thead>
                 <tbody></tbody>
             </table>
         </div>
+
+        <div class="card expense-section">
+            <h2>Expenses</h2>
+            <table class="budget-table" id="expense-table">
+                <thead>
+                    <tr>
+                        <th>Category</th>
+                        <th class="right">Actual</th>
+                        <th class="right">Budgeted</th>
+                        <th class="right">Variance</th>
+                        <th class="right">% of Budget</th>
+                    </tr>
+                </thead>
+                <tbody></tbody>
+            </table>
+        </div>
+
+        <div class="charts-grid">
+            <div class="card">
+                <h2>Monthly Spending Trends</h2>
+                <div class="chart-container">
+                    <canvas id="monthlyChart"></canvas>
+                </div>
+            </div>
+            <div class="card">
+                <h2>Expense Breakdown</h2>
+                <div class="chart-container">
+                    <canvas id="pieChart"></canvas>
+                </div>
+            </div>
+        </div>
+
+        <div class="card">
+            <h2>Budget Performance by Category</h2>
+            <div class="chart-container">
+                <canvas id="barChart"></canvas>
+            </div>
+        </div>
     </div>
 
     <script>
-        let transactions = [];
-        let timeView = 'month';
-        let selectedCategory = 'all';
-        let charts = {
-            time: null,
-            pie: null,
-            bar: null
+        let budgetData = {
+            transactions: [],
+            income: [],
+            expenses: [],
+            months: []
         };
+        let selectedMonth = 'all';
+        let charts = { monthly: null, pie: null, bar: null };
 
-        function showError(message) {
+        function showMessage(message, isError = false) {
             const errorDiv = document.getElementById('error-msg');
-            errorDiv.textContent = message;
-            errorDiv.style.display = 'block';
-            setTimeout(() => {
+            const successDiv = document.getElementById('success-msg');
+            
+            if (isError) {
+                errorDiv.textContent = message;
+                errorDiv.style.display = 'block';
+                successDiv.style.display = 'none';
+                setTimeout(() => errorDiv.style.display = 'none', 5000);
+            } else {
+                successDiv.textContent = message;
+                successDiv.style.display = 'block';
                 errorDiv.style.display = 'none';
-            }, 5000);
+                setTimeout(() => successDiv.style.display = 'none', 3000);
+            }
         }
 
-        function parseCSV(text) {
+        async function loadExcelFile(file) {
             return new Promise((resolve, reject) => {
-                Papa.parse(text, {
-                    header: true,
-                    dynamicTyping: true,
-                    skipEmptyLines: true,
-                    complete: (results) => resolve(results),
-                    error: (error) => reject(error)
-                });
+                const reader = new FileReader();
+                reader.onload = (e) => {
+                    try {
+                        const data = new Uint8Array(e.target.result);
+                        const workbook = XLSX.read(data, { type: 'array', cellDates: true });
+                        resolve(workbook);
+                    } catch (error) {
+                        reject(error);
+                    }
+                };
+                reader.onerror = reject;
+                reader.readAsArrayBuffer(file);
             });
         }
 
-        async function loadTransactions(text) {
-            try {
-                const parsed = await parseCSV(text);
-                
-                transactions = parsed.data.map(row => ({
-                    ...row,
-                    date: new Date(row['Transaction Date']),
-                    amount: row['Amount'] || 0,
-                    isDebit: row['Credit Debit Indicator'] === 'Debit',
-                    category: (row['Category'] || 'Uncategorized').trim()
-                })).filter(t => t.date && !isNaN(t.date));
+        function parseExcelData(workbook) {
+            // Parse Log sheet for transactions
+            const logSheet = workbook.Sheets['Log'];
+            if (!logSheet) {
+                throw new Error('Log sheet not found in Excel file');
+            }
 
-                if (transactions.length === 0) {
-                    showError('No valid transactions found in the file.');
+            const logData = XLSX.utils.sheet_to_json(logSheet, { header: 1, defval: null });
+            const transactions = logData
+                .filter(row => row[0] && row[1] && row[2])
+                .slice(1)
+                .map(row => ({
+                    month: row[0],
+                    date: row[1] instanceof Date ? row[1] : new Date(row[1]),
+                    description: row[2],
+                    category: row[3] || 'Uncategorized',
+                    income: row[4] || 0,
+                    debit: row[5] || 0
+                }));
+
+            // Parse Dashboard sheet for budget data
+            const dashboardSheet = workbook.Sheets['Dashboard'];
+            if (!dashboardSheet) {
+                throw new Error('Dashboard sheet not found in Excel file');
+            }
+
+            const dashboardData = XLSX.utils.sheet_to_json(dashboardSheet, { header: 1, defval: null });
+            
+            const income = [];
+            const expenses = [];
+            let isIncomeSection = false;
+            let isExpenseSection = false;
+
+            dashboardData.forEach((row, idx) => {
+                if (row[0] === 'Income') {
+                    isIncomeSection = true;
+                    isExpenseSection = false;
+                    return;
+                } else if (row[0] === 'Debit') {
+                    isIncomeSection = false;
+                    isExpenseSection = true;
+                    return;
+                } else if (row[0] === 'Total') {
                     return;
                 }
 
-                updateUI();
-                document.getElementById('loading').style.display = 'none';
-                document.getElementById('app').style.display = 'block';
-            } catch (error) {
-                console.error('Error loading transactions:', error);
-                showError('Error parsing CSV file. Please check the format.');
-            }
-        }
-
-        function getDateRange() {
-            if (transactions.length === 0) return { min: null, max: null, days: 0 };
-            const dates = transactions.map(t => t.date);
-            const min = new Date(Math.min(...dates));
-            const max = new Date(Math.max(...dates));
-            const days = Math.ceil((max - min) / (1000 * 60 * 60 * 24)) + 1;
-            return { min, max, days };
-        }
-
-        function getTotalSpending() {
-            return transactions
-                .filter(t => t.isDebit && (selectedCategory === 'all' || t.category === selectedCategory))
-                .reduce((sum, t) => sum + t.amount, 0);
-        }
-
-        function getAverageSpending() {
-            const total = getTotalSpending();
-            const { days } = getDateRange();
-            
-            if (days === 0) return 0;
-            
-            let divisor;
-            if (timeView === 'year') {
-                divisor = days / 30;
-            } else if (timeView === 'month') {
-                divisor = days;
-            } else {
-                divisor = days / 7;
-            }
-            
-            return divisor > 0 ? total / divisor : 0;
-        }
-
-        function getCategoryData() {
-            const debits = transactions.filter(t => t.isDebit);
-            const categoryMap = {};
-            
-            debits.forEach(t => {
-                if (!categoryMap[t.category]) {
-                    categoryMap[t.category] = 0;
-                }
-                categoryMap[t.category] += t.amount;
-            });
-
-            return Object.entries(categoryMap)
-                .map(([name, value]) => ({ name, value: parseFloat(value.toFixed(2)) }))
-                .sort((a, b) => b.value - a.value);
-        }
-
-        function getTimeSeriesData() {
-            const debits = transactions.filter(t => t.isDebit);
-            const filtered = selectedCategory === 'all' 
-                ? debits 
-                : debits.filter(t => t.category === selectedCategory);
-
-            const timeMap = {};
-            
-            filtered.forEach(t => {
-                let key;
-                if (timeView === 'year') {
-                    key = `${t.date.getFullYear()}-${String(t.date.getMonth() + 1).padStart(2, '0')}`;
-                } else if (timeView === 'month') {
-                    const day = t.date.getDate();
-                    key = `${t.date.getFullYear()}-${String(t.date.getMonth() + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
-                } else {
-                    const startOfWeek = new Date(t.date);
-                    const dayOfWeek = startOfWeek.getDay();
-                    startOfWeek.setDate(startOfWeek.getDate() - dayOfWeek);
-                    key = startOfWeek.toISOString().split('T')[0];
-                }
-
-                if (!timeMap[key]) {
-                    timeMap[key] = 0;
-                }
-                timeMap[key] += t.amount;
-            });
-
-            return Object.entries(timeMap)
-                .map(([period, amount]) => ({ 
-                    period, 
-                    amount: parseFloat(amount.toFixed(2))
-                }))
-                .sort((a, b) => a.period.localeCompare(b.period));
-        }
-
-        function updateCharts() {
-            const timeData = getTimeSeriesData();
-            const categoryData = getCategoryData();
-            
-            // Time series chart
-            if (charts.time) charts.time.destroy();
-            const timeCtx = document.getElementById('timeChart').getContext('2d');
-            charts.time = new Chart(timeCtx, {
-                type: 'line',
-                data: {
-                    labels: timeData.map(d => d.period),
-                    datasets: [{
-                        label: 'Spending ($)',
-                        data: timeData.map(d => d.amount),
-                        borderColor: '#3b82f6',
-                        backgroundColor: 'rgba(59, 130, 246, 0.1)',
-                        tension: 0.1,
-                        fill: true
-                    }]
-                },
-                options: {
-                    responsive: true,
-                    maintainAspectRatio: false,
-                    plugins: {
-                        legend: { display: true },
-                        tooltip: {
-                            callbacks: {
-                                label: (context) => `$${context.parsed.y.toFixed(2)}`
-                            }
-                        }
-                    },
-                    scales: {
-                        y: {
-                            beginAtZero: true,
-                            ticks: {
-                                callback: (value) => '$' + value
-                            }
-                        }
-                    }
+                if (isIncomeSection && row[0] && row[0] !== 'Income' && typeof row[1] === 'number') {
+                    income.push({
+                        category: row[0],
+                        actual: row[1] || 0,
+                        budgeted: row[2] || 0,
+                        months: row.slice(5, 17)
+                    });
+                } else if (isExpenseSection && row[0] && row[0] !== 'Debit' && typeof row[1] === 'number') {
+                    expenses.push({
+                        category: row[0],
+                        actual: Math.abs(row[1] || 0),
+                        budgeted: Math.abs(row[2] || 0),
+                        months: row.slice(5, 17).map(v => Math.abs(v || 0))
+                    });
                 }
             });
 
-            // Pie chart
-            if (charts.pie) charts.pie.destroy();
-            const pieCtx = document.getElementById('pieChart').getContext('2d');
-            const top10 = categoryData.slice(0, 10);
-            charts.pie = new Chart(pieCtx, {
-                type: 'pie',
-                data: {
-                    labels: top10.map(d => d.name),
-                    datasets: [{
-                        data: top10.map(d => d.value),
-                        backgroundColor: [
-                            '#0088FE', '#00C49F', '#FFBB28', '#FF8042', '#8884d8',
-                            '#82ca9d', '#ffc658', '#ff7c7c', '#8dd1e1', '#d084d0'
-                        ]
-                    }]
-                },
-                options: {
-                    responsive: true,
-                    maintainAspectRatio: false,
-                    plugins: {
-                        legend: { position: 'right' },
-                        tooltip: {
-                            callbacks: {
-                                label: (context) => {
-                                    const label = context.label || '';
-                                    const value = context.parsed || 0;
-                                    return `${label}: $${value.toFixed(2)}`;
-                                }
-                            }
-                        }
-                    }
-                }
-            });
+            return { transactions, income, expenses };
+        }
 
-            // Bar chart
-            if (charts.bar) charts.bar.destroy();
-            const barCtx = document.getElementById('barChart').getContext('2d');
-            charts.bar = new Chart(barCtx, {
-                type: 'bar',
-                data: {
-                    labels: top10.map(d => d.name),
-                    datasets: [{
-                        label: 'Amount ($)',
-                        data: top10.map(d => d.value),
-                        backgroundColor: '#3b82f6'
-                    }]
-                },
-                options: {
-                    responsive: true,
-                    maintainAspectRatio: false,
-                    plugins: {
-                        legend: { display: false }
-                    },
-                    scales: {
-                        y: {
-                            beginAtZero: true,
-                            ticks: {
-                                callback: (value) => '$' + value
-                            }
-                        }
-                    }
-                }
-            });
+        function getUniqueMonths(transactions) {
+            const months = [...new Set(transactions.map(t => t.month))];
+            const monthOrder = ['January', 'February', 'March', 'April', 'May', 'June', 
+                               'July', 'August', 'September', 'October', 'November', 'December'];
+            return months.sort((a, b) => monthOrder.indexOf(a) - monthOrder.indexOf(b));
+        }
+
+        function filterByMonth(data, month) {
+            if (month === 'all') return data;
+            return data.filter(item => item.month === month);
+        }
+
+        function updateMonthSelector() {
+            const selector = document.getElementById('month-selector');
+            const months = ['all', ...budgetData.months];
+            
+            selector.innerHTML = months.map(month => `
+                <button class="month-btn ${month === selectedMonth ? 'active' : ''}" 
+                        onclick="selectMonth('${month}')">
+                    ${month === 'all' ? 'Year to Date' : month}
+                </button>
+            `).join('');
+        }
+
+        function selectMonth(month) {
+            selectedMonth = month;
+            updateUI();
         }
 
         function updateStats() {
-            const total = getTotalSpending();
-            const avg = getAverageSpending();
-            const count = transactions.filter(t => t.isDebit).length;
-            const { min, max, days } = getDateRange();
+            let income = budgetData.income;
+            let expenses = budgetData.expenses;
 
-            document.getElementById('total-spending').textContent = '$' + total.toFixed(2);
-            document.getElementById('avg-spending').textContent = '$' + avg.toFixed(2);
-            document.getElementById('total-transactions').textContent = count;
-
-            const periodText = timeView === 'year' ? 'Month' : timeView === 'month' ? 'Day' : 'Week';
-            document.getElementById('avg-period').textContent = periodText;
-
-            if (min && max) {
-                document.getElementById('header-info').textContent = 
-                    `Track your spending across categories and time periods • Data: ${min.toLocaleDateString()} to ${max.toLocaleDateString()} (${days} days)`;
+            if (selectedMonth !== 'all') {
+                const monthIndex = ['January', 'February', 'March', 'April', 'May', 'June',
+                                   'July', 'August', 'September', 'October', 'November', 'December']
+                                   .indexOf(selectedMonth);
+                
+                income = budgetData.income.map(item => ({
+                    ...item,
+                    actual: item.months[monthIndex] || 0
+                }));
+                
+                expenses = budgetData.expenses.map(item => ({
+                    ...item,
+                    actual: item.months[monthIndex] || 0
+                }));
             }
-        }
 
-        function updateCategorySelect() {
-            const categories = ['all', ...new Set(transactions.filter(t => t.isDebit).map(t => t.category))];
-            const select = document.getElementById('category-select');
-            select.innerHTML = categories.map(cat => 
-                `<option value="${cat}" ${cat === selectedCategory ? 'selected' : ''}>
-                    ${cat === 'all' ? 'All Categories' : cat}
-                </option>`
-            ).join('');
-        }
-
-        function updateTable() {
-            const categoryData = getCategoryData();
-            const total = categoryData.reduce((sum, c) => sum + c.value, 0);
-            const tbody = document.querySelector('#category-table tbody');
+            const totalIncome = income.reduce((sum, item) => sum + item.actual, 0);
+            const totalExpenses = expenses.reduce((sum, item) => sum + item.actual, 0);
+            const netIncome = totalIncome - totalExpenses;
             
-            tbody.innerHTML = categoryData.map(cat => {
-                const percentage = ((cat.value / total) * 100).toFixed(1);
+            const budgetedExpenses = expenses.reduce((sum, item) => sum + item.budgeted, 0);
+            const variance = budgetedExpenses - totalExpenses;
+
+            document.getElementById('total-income').textContent = '$' + totalIncome.toFixed(2);
+            document.getElementById('total-expenses').textContent = '$' + totalExpenses.toFixed(2);
+            document.getElementById('net-income').textContent = '$' + netIncome.toFixed(2);
+            document.getElementById('net-income').className = 'stat-value ' + (netIncome >= 0 ? 'positive' : 'negative');
+            
+            document.getElementById('budget-variance').textContent = '$' + Math.abs(variance).toFixed(2);
+            document.getElementById('budget-variance').className = 'stat-value ' + (variance >= 0 ? 'positive' : 'negative');
+            document.getElementById('budget-note').textContent = variance >= 0 ? 'Under budget' : 'Over budget';
+
+            const dateRange = selectedMonth === 'all' ? 'Year to Date' : selectedMonth;
+            document.getElementById('header-info').textContent = `Viewing: ${dateRange} • ${budgetData.transactions.length} transactions loaded`;
+        }
+
+        function updateTables() {
+            let income = budgetData.income;
+            let expenses = budgetData.expenses;
+
+            if (selectedMonth !== 'all') {
+                const monthIndex = ['January', 'February', 'March', 'April', 'May', 'June',
+                                   'July', 'August', 'September', 'October', 'November', 'December']
+                                   .indexOf(selectedMonth);
+                
+                income = budgetData.income.map(item => ({
+                    ...item,
+                    actual: item.months[monthIndex] || 0
+                }));
+                
+                expenses = budgetData.expenses.map(item => ({
+                    ...item,
+                    actual: item.months[monthIndex] || 0
+                }));
+            }
+
+            // Income table
+            const incomeBody = document.querySelector('#income-table tbody');
+            const totalIncome = income.reduce((sum, item) => sum + item.actual, 0);
+            const totalBudgetedIncome = income.reduce((sum, item) => sum + item.budgeted, 0);
+            
+            incomeBody.innerHTML = income.map(item => {
+                const variance = item.actual - item.budgeted;
+                const pct = item.budgeted > 0 ? (item.actual / item.budgeted * 100) : 0;
                 return `
                     <tr>
-                        <td>${cat.name}</td>
-                        <td>$${cat.value.toFixed(2)}</td>
-                        <td>${percentage}%</td>
+                        <td class="category-name">${item.category}</td>
+                        <td class="right positive-value">$${item.actual.toFixed(2)}</td>
+                        <td class="right">$${item.budgeted.toFixed(2)}</td>
+                        <td class="right ${variance >= 0 ? 'positive-value' : 'negative-value'}">
+                            $${Math.abs(variance).toFixed(2)} ${variance >= 0 ? '▲' : '▼'}
+                        </td>
+                        <td class="right">${pct.toFixed(1)}%</td>
                     </tr>
                 `;
-            }).join('');
-        }
+            }).join('') + `
+                <tr class="total-row">
+                    <td>Total Income</td>
+                    <td class="right">$${totalIncome.toFixed(2)}</td>
+                    <td class="right">$${totalBudgetedIncome.toFixed(2)}</td>
+                    <td class="right">$${Math.abs(totalIncome - totalBudgetedIncome).toFixed(2)}</td>
+                    <td class="right">${totalBudgetedIncome > 0 ? (totalIncome / totalBudgetedIncome * 100).toFixed(1) : 0}%</td>
+                </tr>
+            `;
 
-        function updateUI() {
-            updateStats();
-            updateCategorySelect();
-            updateCharts();
-            updateTable();
-        }
-
-        // Event listeners
-        document.getElementById('fileInput').addEventListener('change', (e) => {
-            const file = e.target.files[0];
-            if (!file) return;
-
-            const reader = new FileReader();
-            reader.onload = (event) => {
-                loadTransactions(event.target.result);
-            };
-            reader.onerror = () => {
-                showError('Error reading file. Please try again.');
-            };
-            reader.readAsText(file);
-        });
-
-        document.querySelectorAll('.btn-group .btn').forEach(btn => {
-            btn.addEventListener('click', (e) => {
-                document.querySelectorAll('.btn-group .btn').forEach(b => b.classList.remove('active'));
-                e.target.classList.add('active');
-                timeView = e.target.dataset.view;
-                updateUI();
-            });
-        });
-
-        document.getElementById('category-select').addEventListener('change', (e) => {
-            selectedCategory = e.target.value;
-            updateUI();
-        });
-
-        // Initialize with sample message
-        document.getElementById('loading').textContent = 'Please import a CSV file to get started';
-        document.getElementById('loading').style.display = 'flex';
-    </script>
-</body>
-</html>
+            //
